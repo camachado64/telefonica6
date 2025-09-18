@@ -12,7 +12,8 @@ export const dbConnection: ConnectionPool = new ConnectionPool({
   password: config.dbPassword,
   database: config.dbName,
   options: {
-    encrypt: true,
+    encrypt: false,
+    trustServerCertificate: true,
     enableArithAbort: true,
   },
 });
