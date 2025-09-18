@@ -12,7 +12,7 @@ export const dbConnection: ConnectionPool = new ConnectionPool({
   password: config.dbPassword,
   database: config.dbName,
   options: {
-    encrypt: false,
+    encrypt: true,
     enableArithAbort: true,
   },
 });
