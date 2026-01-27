@@ -113,11 +113,11 @@ class DefaultRTNavigatablePagedCollection<Config extends SchemaEndpointConfig, I
     }
 
     public get total(): number {
-        return this._page.total;
+        return this._page.total as number;
     }
 
     public get pages(): number {
-        return this._page.pages;
+        return this._page.pages as number;
     }
 
     public get count(): number {
