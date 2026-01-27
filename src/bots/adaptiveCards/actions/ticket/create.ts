@@ -12,8 +12,9 @@ import { ActionHandler } from "../../../commands/handler";
 import { HandlerMessage } from "../../../commands/message";
 import { HandlerTriggerData } from "../../../commands/manager";
 import { BotConfiguration } from "../../../../config/config";
-// import { RTClient } from "../../../../utils/client/rt/rt";
-// import { Queue, Ticket } from "../../../../utils/client/rt/model";
+import { RTClient } from "../../../../utils/client/rt/client";
+import { Queue } from "../../../../utils/client/rt/schemas/queues";
+import { TicketRef } from "../../../../utils/client/rt/schemas/tickets";
 import { GraphClient } from "../../../../utils/client/graph";
 import { isKeyOf } from "../../../../utils/misc";
 // import { LogsRepository } from "../../../server/repositories/logs";
@@ -25,7 +26,7 @@ export class TicketAdaptiveCardCreateActionHandler implements ActionHandler {
 
     constructor(
         private readonly _config: BotConfiguration,
-        // private readonly _rt: RTClient,
+        private readonly _rt: RTClient,
         private readonly _graph: GraphClient // private readonly _logs: LogsRepository
     ) {}
 
@@ -121,7 +122,7 @@ export class TicketAdaptiveCardCreateActionHandler implements ActionHandler {
         console.debug(`threadMessages.length: ${replies?.length}`);
 
         // Get the chosen queue from 'ticketCategoryChoiceSet' and get the queue from the API
-        // const queue: Queue = await this._rt.queues.id(state.ticket.ticketCategoryChoiceSet.value).get();
+        const queue: Queue = await this._rt.queues.id(state.ticket.ticketCategoryChoiceSet.value).request.get();
 
         console.debug(`state.ticket:`, state.ticket);
 
@@ -140,18 +141,18 @@ export class TicketAdaptiveCardCreateActionHandler implements ActionHandler {
             }
         }
 
+        const owner = await this._rt.users.id(trigger.replyFrom.email).request.get();
+
         // Create the ticket in the RT API
-        // const ticket: Ticket = await this._rt.tickets.postTickets({
-        //     requestBody: {
-        //         Queue: queue.id,
-        //         Subject: thread.subject ?? "No Subject",
-        //         Status: state.ticket.ticketStateChoiceSet.value,
-        //         Content: state.ticket.ticketDescriptionInput.value,
-        //         TimeWorked: state.ticket.ticketTimeTakenInput.value,
-        //         Requestor: trigger.threadFrom.email,
-        //         Owner: trigger.replyFrom.email,
-        //     } as any,
-        // });
+        const ticket: TicketRef = await this._rt.tickets.create.request.queryParam("Queue", queue.id).post({
+            Subject: thread.subject ?? "No Subject",
+            Status: state.ticket.ticketStateChoiceSet.value,
+            Content: state.ticket.ticketDescriptionInput.value,
+            TimeWorked: state.ticket.ticketTimeTakenInput.value,
+            Requestor: trigger.threadFrom.email,
+            Owner: owner.Name, //trigger.replyFrom.email,
+            CustomFields: customFieldsBody,
+        });
         // queue,
         // thread.subject ?? "No Subject",
         // state.ticket.ticketStateChoiceSet.value,
@@ -232,6 +233,24 @@ export class TicketAdaptiveCardCreateActionHandler implements ActionHandler {
                 }
             }
 
+            // TODO: Attachments currently added as links in the message body content, need to be added as proper attachments to the ticket
+            const attachments: any[] = [];
+            if (message.body && (message.attachments?.length ?? 0) > 0) {
+                message.body.content += "<br><br>Attachments:<br>";
+
+                for (const attachment of message.attachments ?? []) {
+                    message.body.content += `<a href="${attachment.contentUrl}">${attachment.name}</a><br>`;
+                }
+            }
+
+            await this._rt.tickets.id(ticket.id!).correspond.request.post({
+                Subject: `Respuesta de ${message.from?.user?.displayName}`,
+                ContentType: message.body.contentType || "text/plain",
+                Content: message.body.content,
+                Attachments: attachments,
+                TimeTaken: "0",
+            });
+
             // await this._rt.tickets.postTicketCorrespond({
             //     id: ticket.id,
             //     requestBody: {
@@ -246,8 +265,8 @@ export class TicketAdaptiveCardCreateActionHandler implements ActionHandler {
         }
 
         // Send a message to the user that the ticket was created and provide a link to the ticket
-        // await context.sendActivity(
-        //     `Se hay creado el ticket con el número: ${ticket.id}. Lo puedes acceder en [este enlace](${this._config.apiEndpoint}/Ticket/Display.html?id=${ticket.id}).`
-        // );
+        await context.sendActivity(
+            `Se hay creado el ticket con el número: ${ticket.id}. Lo puedes acceder en [este enlace](${this._config.apiEndpoint}/Ticket/Display.html?id=${ticket.id}).`
+        );
     }
 }
