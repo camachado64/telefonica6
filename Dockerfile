@@ -5,6 +5,7 @@ WORKDIR /app
 COPY package.json /app
 COPY tsconfig.json /app
 COPY ./src /app/src
+COPY ./data /app/data
 #COPY ./env /app/env
 #RUN mkdir /certs
 #COPY telefonica-is-ticketbot.apps.ocp-epg.hi.inet.key /certs
