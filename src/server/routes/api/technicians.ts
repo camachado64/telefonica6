@@ -49,7 +49,7 @@ router.get("/:id", async (req: Request, res: Response, next: NextFunction): Prom
 
     try {
         // Parse the id from the request params
-        const id = parseInt(req.params?.id as string);
+        const id = parseInt(req.params?.id);
         if (isNaN(id)) {
             // If the request params does not contain a valid id, send a 400 error to the client
             res.status(400).json({
@@ -179,7 +179,7 @@ router.put("/:id", async (req: Request, res: Response, next: NextFunction): Prom
 
     try {
         // Parse the id from the request params
-        const id = parseInt(req.params.id as string) ;
+        const id = parseInt(req.params.id);
         if (isNaN(id)) {
             // If the request params does not contain a valid id, send a 400 error to the client
             res.status(400).json({
@@ -266,7 +266,7 @@ router.delete("/:id", async (req: Request, res: Response, next: NextFunction): P
 
     try {
         // Parse the id from the request params
-        const id = parseInt(req.params.id as string);
+        const id = parseInt(req.params.id);
         if (isNaN(id)) {
             // If the request params does not contain a valid id, send a 400 error to the client
             res.status(400).json({
