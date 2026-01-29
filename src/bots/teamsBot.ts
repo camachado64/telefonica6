@@ -349,5 +349,3 @@ export class TeamsBot extends TeamsActivityHandler {
         }
     }
 }
-
-}
