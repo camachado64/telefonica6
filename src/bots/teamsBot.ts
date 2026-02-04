@@ -7,21 +7,27 @@ import {
     InvokeResponse,
     TeamsInfo,
     TeamsChannelAccount,
-    MemoryStorage,
+    // MemoryStorage,
     // CloudAdapter,
 } from "botbuilder";
 // import { UserTokenClient } from "botframework-connector";
 
 import { BotConfiguration } from "../config/config";
 import { HandlerManager } from "./commands/manager";
-import { DialogManager } from "./dialogs/manager";
+// import { DialogManager } from "./dialogs/manager";
 import { AdaptiveCardAction, AdaptiveCardActionActivityValue } from "./adaptiveCards/actions/actions";
 import { AdaptiveCards } from "./adaptiveCards/adaptiveCards";
 
 import { TechnicianRepository } from "../server/repositories/technicians";
 import { HandlerTurnContextFactory } from "./commands/context";
 
-export interface TeamsBotOptions {
+export abstract class ActivityHandlerFactory<ParamTypes extends Array<any> = []> {
+    public static Default: ActivityHandlerFactory<[DefaultActivityHandlerOptions]>;
+
+    public abstract create(...options: ParamTypes): TeamsActivityHandler;
+}
+
+interface DefaultActivityHandlerOptions {
     config: BotConfiguration;
 
     conversationState: ConversationState;
@@ -30,121 +36,85 @@ export interface TeamsBotOptions {
 
     handlerManager: HandlerManager;
 
-    dialogManager: DialogManager;
+    // dialogManager: DialogManager;
 
     techRepository: TechnicianRepository;
 
     contextFactory: HandlerTurnContextFactory;
+
+    errorHandler: ActivityErrorHandler;
 }
 
-export interface TeamsBotBuilder {
-    options(options: TeamsBotOptions): TeamsBotBuilder;
+// @ts-ignore
+class DefaultActivityHandlerFactory extends ActivityHandlerFactory<[DefaultActivityHandlerOptions]> {
+    private static _instance: DefaultActivityHandlerFactory = new DefaultActivityHandlerFactory();
 
-    config(config: BotConfiguration): TeamsBotBuilder;
-
-    conversationState(conversationState: ConversationState): TeamsBotBuilder;
-
-    userState(userState: UserState): TeamsBotBuilder;
-
-    handlerManager(handlerManager: HandlerManager): TeamsBotBuilder;
-
-    // dialogManager(dialogManager: DialogManager): TeamsBotBuilder;
-
-    techRepository(techRepository: TechnicianRepository): TeamsBotBuilder;
-
-    contextFactory(contextFactory: HandlerTurnContextFactory): TeamsBotBuilder;
-
-    build(): TeamsBot;
-}
-
-export class DefaultTeamsBotBuilder implements TeamsBotBuilder {
-    // public static Instance: TeamsBotBuilder = new TeamsBotBuilder();
-
-    private _options: Partial<TeamsBotOptions> = {};
-
-    constructor() {
-        // if (TeamsBotBuilder.Instance) {
-        //   throw new Error(
-        //     `${TeamsBotBuilder.name} is a singleton class. Use '${TeamsBotBuilder.name}.Instance' to access the instance.`
-        //   );
-        // }
+    protected constructor() {
+        super();
+        ActivityHandlerFactory.Default = DefaultActivityHandlerFactory._instance;
     }
 
-    public options(options: TeamsBotOptions): TeamsBotBuilder {
-        this._options = options;
-        return this;
-    }
-
-    public config(config: BotConfiguration): TeamsBotBuilder {
-        this._options.config = config;
-        return this;
-    }
-
-    public conversationState(conversationState: ConversationState): TeamsBotBuilder {
-        this._options.conversationState = conversationState;
-        return this;
-    }
-
-    public userState(userState: UserState): TeamsBotBuilder {
-        this._options.userState = userState;
-        return this;
-    }
-
-    public handlerManager(handlerManager: HandlerManager): TeamsBotBuilder {
-        this._options.handlerManager = handlerManager;
-        return this;
-    }
-
-    // public dialogManager(dialogManager: DialogManager): TeamsBotBuilder {
-    //     this._options.dialogManager = dialogManager;
-    //     return this;
-    // }
-
-    public techRepository(techRepository: TechnicianRepository): TeamsBotBuilder {
-        this._options.techRepository = techRepository;
-        return this;
-    }
-
-    public contextFactory(contextFactory: HandlerTurnContextFactory): TeamsBotBuilder {
-        this._options.contextFactory = contextFactory;
-        return this;
-    }
-
-    public build(): TeamsBot {
-        if (!this._options.config) {
-            throw new Error(`Cannot build TeamsBot: missing 'config' option.`);
-        }
-        if (!this._options.conversationState) {
-            this._options.conversationState = new ConversationState(new MemoryStorage());
-        }
-        if (!this._options.userState) {
-            this._options.userState = new UserState(new MemoryStorage());
-        }
-        if (!this._options.handlerManager) {
-            throw new Error(`Cannot build TeamsBot: missing 'handlerManager' option.`);
-        }
-        // if (!this._options.dialogManager) {
-        //     throw new Error(`Cannot build TeamsBot: missing 'dialogManager' option.`);
-        // }
-        if (!this._options.techRepository) {
-            throw new Error(`Cannot build TeamsBot: missing 'techRepository' option.`);
-        }
-        if (!this._options.contextFactory) {
-            throw new Error(`Cannot build TeamsBot: missing 'contextFactory' option.`);
-        }
+    public create(options: DefaultActivityHandlerOptions): TeamsActivityHandler {
         return new TeamsBot(
-            this._options.config,
-            this._options.conversationState,
-            this._options.userState,
-            this._options.handlerManager,
-            // this._options.dialogManager,
-            this._options.techRepository,
-            this._options.contextFactory,
+            options.config,
+            options.conversationState,
+            options.userState,
+            options.handlerManager,
+            // options.dialogManager,
+            options.techRepository,
+            options.contextFactory,
+            options.errorHandler,
         );
     }
 }
 
-export class TeamsBot extends TeamsActivityHandler {
+export abstract class ActivityErrorHandlerFactory<ParamTypes extends Array<any> = []> {
+    public static Default: ActivityErrorHandlerFactory<[]>;
+
+    abstract create(...options: ParamTypes): ActivityErrorHandler;
+}
+
+// @ts-ignore
+class DefaultActivityErrorHandlerFactory extends ActivityErrorHandlerFactory<[]> {
+    private static _instance: DefaultActivityErrorHandlerFactory = new DefaultActivityErrorHandlerFactory();
+
+    protected constructor() {
+        super();
+        ActivityErrorHandlerFactory.Default = DefaultActivityErrorHandlerFactory._instance;
+    }
+
+    public create(): ActivityErrorHandler {
+        return new DefaultActivityErrorHandler();
+    }
+}
+
+export interface ActivityErrorHandler {
+    handle(context: TurnContext, error: any): Promise<void>;
+}
+
+class DefaultActivityErrorHandler implements ActivityErrorHandler {
+    public async handle(context: TurnContext, error: any): Promise<void> {
+        try {
+            let errorMsg = `Hay ocurrido un error al procesar la actividad. Por favor, inténtalo de nuevo más tarde.\n\n Razón: ${error.message}\n\n`;
+            console.error(error);
+
+            while (error?.cause || error?.reason) {
+                error = error.cause || error.reason;
+                errorMsg += `Causado por: '${error.message}'\n`;
+                console.error("Caused by:", error);
+            }
+
+            if (errorMsg.length > 0) {
+                await context.sendActivity(errorMsg);
+            }
+        } catch (error: any) {
+            console.error("Error handling activity error:", error);
+            // Swallow the error to prevent bot from crashing
+        }
+    }
+}
+
+class TeamsBot extends TeamsActivityHandler {
     constructor(
         private readonly _config: BotConfiguration,
         private readonly _conversationState: ConversationState,
@@ -153,6 +123,7 @@ export class TeamsBot extends TeamsActivityHandler {
         // private readonly _dialogManager: DialogManager,
         private readonly _techRepository: TechnicianRepository,
         private readonly _contextFactory: HandlerTurnContextFactory,
+        private readonly _errorHandler: ActivityErrorHandler,
     ) {
         super();
 
@@ -177,7 +148,7 @@ export class TeamsBot extends TeamsActivityHandler {
         const proxiedContext: TurnContext = this._contextFactory.create(context);
 
         await super.run(proxiedContext).catch(async (error: any): Promise<void> => {
-            await this._handleError(context, error).catch(async (err: any): Promise<void> => {
+            await this._errorHandler.handle(context, error).catch(async (err: any): Promise<void> => {
                 console.error("Error handling run error:", err);
             });
         });
@@ -237,7 +208,7 @@ export class TeamsBot extends TeamsActivityHandler {
 
     private async _onSignInAction(context: TurnContext, query: SigninStateVerificationQuery): Promise<void> {
         return this._handlerManager.onSignInAction(context, query).catch(async (error: any): Promise<void> => {
-            await this._handleError(context, error).catch(async (err: any): Promise<void> => {
+            await this._errorHandler.handle(context, error).catch(async (err: any): Promise<void> => {
                 console.error("Error handling sign-in action error:", err);
             });
         });
@@ -316,7 +287,7 @@ export class TeamsBot extends TeamsActivityHandler {
         }
 
         await this._handlerManager.resolveAndDispatch(context, text).catch(async (error: any): Promise<void> => {
-            await this._handleError(context, error).catch(async (err: any): Promise<void> => {
+            await this._errorHandler.handle(context, error).catch(async (err: any): Promise<void> => {
                 console.error("Error handling message dispatch error:", err);
             });
         });
@@ -335,23 +306,24 @@ export class TeamsBot extends TeamsActivityHandler {
                 // await context.sendActivity(welcomeText);
             }
         }
+
         return await next();
     }
 
-    private async _handleError(context: TurnContext, error: any): Promise<void> {
-        let errorMsg = `Hay ocurrido un error al procesar la actividad. Por favor, inténtalo de nuevo más tarde.\n\n Razón: ${error.message}\n\n`;
+    // private async _handleError(context: TurnContext, error: any): Promise<void> {
+    //     let errorMsg = `Hay ocurrido un error al procesar la actividad. Por favor, inténtalo de nuevo más tarde.\n\n Razón: ${error.message}\n\n`;
 
-        console.error(error);
+    //     console.error(error);
 
-        while (error?.cause || error?.reason) {
-            error = error.cause || error.reason;
-            errorMsg += `Causado por: '${error.message}'\n`;
+    //     while (error?.cause || error?.reason) {
+    //         error = error.cause || error.reason;
+    //         errorMsg += `Causado por: '${error.message}'\n`;
 
-            console.error("Caused by:", error);
-        }
+    //         console.error("Caused by:", error);
+    //     }
 
-        if (errorMsg.length > 0) {
-            await context.sendActivity(errorMsg);
-        }
-    }
+    //     if (errorMsg.length > 0) {
+    //         await context.sendActivity(errorMsg);
+    //     }
+    // }
 }
